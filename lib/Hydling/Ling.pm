@@ -10,6 +10,9 @@ has 'control_port';
 
 has 'irc';
 
+sub on { shift->irc->on(@_) }
+sub unsubscribe { shift->irc->unsubscribe(@_) }
+
 sub start ($self) {
   $self->control_port(
     Hydling::ControlPort->new(
@@ -32,23 +35,24 @@ sub control_port_setup ($self, $control_port) {
   foreach my $accessor (
     qw(connect_timeout local_address name nick pass real_host server)
   ) {
-    $h->call($accessor => sub ($r, $value = undef) {
-      $self->$accessor($value//());
-      $r->done($self->$accessor);
+    $h->call($accessor => sub ($r, @value) {
+      $self->$accessor($value[0]) if @value;
+      return $self->$accessor;
     });
   }
   $h->listen(qr/^(?:irc|ctcp)_/, sub ($r) {
-    my $name = $r->done->listen;
+    my $name = $r->name;
     my $on = sub ($, @args) { $r->notify(@args) };
-    my $cb = $self->irc->on($name => $r->curry::notify);
-    $r->on_unlisten(sub { $self->irc->unsubcribe($name => $cb) });
+    my $cb = $self->on($name => $r->curry::notify);
+    $r->on_cancel($self->curry::unsubscribe($name => $cb));
+    return;
   });
   $h->watch(status => sub ($r) {
     my $cb = $self->on(status => sub ($, $value) {
-      $r->send($value);
+      $r->value($value);
     });
-    $r->on_unwatch(sub { $self->unsubscribe(status => $cb) });
-    $r->done->send($self->status);
+    $r->on_cancel($self->curry::unsubscribe(status => $cb));
+    $r->done->value($self->status);
   });
 }
 
