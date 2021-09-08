@@ -1,10 +1,14 @@
 package Hydling::ControlPort::CastRequest;
 
-use Hydling::Class 'Hydling::ControlPort::CallRequest';
+use Hydling::Base;
+
+with 'Hydling::ControlPort::Role::Request';
 
 sub send { }
 
 sub register { }
+
+sub data { }
 
 around dispatch => sub ($orig, $self, @args) => sub {
   return $self->session->barf(protocol => "Tag not allowed for cast")

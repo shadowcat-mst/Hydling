@@ -1,38 +1,12 @@
 package Hydling::ControlPort::Session;
 
 use Mojo::JSON;
-use Hydling::Class;
+use Hydling::Base 'Mojo::EventEmitter';
 
-has stream => undef;
-has buf => '';
 has barfed => 0;
-has handlers => undef;
 has running => sub { {} };
 
-sub start ($self) {
-  $self->buf;
-  $self->stream->on(close => $self->curry::weak::close);
-  $self->stream->on(read => $self->curry::weak::read);
-  $self;
-}
-
-sub read ($self, $stream, $data) {
-  my \$buf = \$self->{buf};
-  $buf .= $data;
-  while ($buf =~ s/^(.*)\r?\n//ms) {
-    my $line = $1;
-    my @command = do {
-      try {
-        @{decode_json($line)};
-      } catch ($err) {
-        return $self->barf(protocol => $err);
-      }
-    };
-    $self->dispatch(@command);
-    return if $self->barfed;
-  }
-  return;
-}
+with 'Hydling::ControlPort::Role::HasHandlers';
 
 sub dispatch ($self, @command) {
   return if $self->barfed;
@@ -46,41 +20,29 @@ sub dispatch ($self, @command) {
   my $type = shift @command;
   return $self->barf(protocol => "Command type should be a string")
     if ref($type);
-  my $method = "handle_${type}";
+  my $method = "_dispatch_${type}";
   return $self->barf(protocol => "Invalid command type ${type}")
     unless $self->can($method);
   return $self->barf(protocol => "Empty command args")
     unless @command;
   try {
-    $self->${\"handle_${type}"}($type, $tag, @command);
+    $self->$method($type, $tag, @command);
   } catch ($err) {
     return $self->barf(internal => $err);
   }
 }
 
-sub barf ($self, $stream, @barf) {
-  $self->barfed(1)->stream->write(
-    encode_json([ bar => @barf ])."\n",
-    $stream->curry::weak::close,
-  );
-  return;
-}
+sub barf ($self, @barf) { $self->barfed(1)->emit(barf => @barf) }
 
-sub send ($self, @send) {
-  my $data = do {
-    try {
-      encode_json(\@send)."\n";
-    } catch ($err) {
-      return $self->barf(internal => "Couldn't serialise message: $err");
-    }
-  };
-  $self->stream->write($data);
-  return $self;
-}
+sub send ($self, @send) { $self->emit(send => @send) }
 
-sub handle_call { shift->_handle_request(@_) }
-sub handle_cast { shift->_handle_request(@_) }
-sub handle_listen { shift->_handle_request(@_) }
+sub _dispatch_call { shift->_request(@_) }
+sub _dispatch_cast { shift->_request(@_) }
+sub _dispatch_listen { shift->_request(@_) }
+sub _dispatch_trap { shift->_request(@_) }
+
+sub _dispatch_unlisten { shift->_cancel(@_) }
+sub _dispatch_untrap { shift->_cancel(@_) }
 
 sub _request_class ($self, $type) {
   my $class = "Hydling::ControlPort::${\ucfirst($type)}Request";
@@ -89,7 +51,7 @@ sub _request_class ($self, $type) {
   $class;
 }
 
-sub _handle_request ($self, $type, $tag, $name, @args) {
+sub _request ($self, $type, $tag, $name, @args) {
   if (my $running = $self->running->{$tag}) {
     return $self->barf(protocol => "Duplicate use of tag $tag") if $tag;
     $running->awaitable->AWAIT_ON_READY(sub {
@@ -103,6 +65,14 @@ sub _handle_request ($self, $type, $tag, $name, @args) {
     args => \@args,
     session => $self,
   )->dispatch;
+  return;
+}
+
+sub _cancel ($self, $type, $tag, $name, @) {
+  $type =~ s/^un//;
+  if (my $running = $self->running->{join ':', $type, $name}) {
+    $running->cancel;
+  }
   return;
 }
 

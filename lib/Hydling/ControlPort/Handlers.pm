@@ -1,6 +1,6 @@
 package Hydling::ControlPort::Handlers;
 
-use Hydling::Class;
+use Hydling::Base;
 
 has [qw(call_handlers listen_handlers watch_handlers)] => sub { [ {}, [] ] };
 

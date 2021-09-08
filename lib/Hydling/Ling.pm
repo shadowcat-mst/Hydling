@@ -2,7 +2,7 @@ package Hydling::Ling;
 
 use Hydling::ControlPort;
 use Mojo::IRC;
-use Hydling::Class;
+use Hydling::Base;
 
 has 'control_port_path';
 
@@ -15,8 +15,8 @@ sub unsubscribe { shift->irc->unsubscribe(@_) }
 
 sub start ($self) {
   $self->control_port(
-    Hydling::ControlPort->new(
-    socket_path => $self->control_port_path,
+    Hydling::ControlPort->server(
+      path => $self->control_port_path,
     )
     ->tap($self->curry::control_port_setup)
     ->start
@@ -42,17 +42,16 @@ sub control_port_setup ($self, $control_port) {
   }
   $h->listen(qr/^(?:irc|ctcp)_/, sub ($r) {
     my $name = $r->name;
-    my $on = sub ($, @args) { $r->notify(@args) };
-    my $cb = $self->on($name => $r->curry::notify);
+    my $cb = $self->on($name => sub ($, @args) { $r->notify(@args) });
     $r->on_cancel($self->curry::unsubscribe($name => $cb));
     return;
   });
-  $h->watch(status => sub ($r) {
+  $h->listen(status => sub ($r) {
     my $cb = $self->on(status => sub ($, $value) {
-      $r->value($value);
+      $r->notify($value);
     });
     $r->on_cancel($self->curry::unsubscribe(status => $cb));
-    $r->done->value($self->status);
+    return $self->status;
   });
 }
 

@@ -1,4 +1,4 @@
-package Hydling::Class;
+package Hydling::Base;
 
 use curry;
 use Import::Into;
@@ -8,6 +8,7 @@ sub import ($me, $base = '-base') {
   Feature::Compat::Try->import::into(1);
   Carp->import::into(1, 'croak');
   Safe::Isa->import::into(1);
+  Role::Tiny::With->import::into(1);
   Mojo::Base->import::into(1, $base, -signatures, -async_await);
   warnings->import::into(1, FATAL => 'uninitialized');
   warnings->unimport::out_of(1, 'once');
