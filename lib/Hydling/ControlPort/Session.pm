@@ -8,7 +8,7 @@ has running => sub { {} };
 
 with 'Hydling::ControlPort::Role::HasHandlers';
 
-sub dispatch ($self, @command) {
+sub receive ($self, @command) {
   return if $self->barfed;
   my $tag = (
     ($command[0]//'') =~ /^[A-Z]+[0-9]+$/
@@ -20,7 +20,7 @@ sub dispatch ($self, @command) {
   my $type = shift @command;
   return $self->barf(protocol => "Command type should be a string")
     if ref($type);
-  my $method = "_dispatch_${type}";
+  my $method = "_receive_${type}";
   return $self->barf(protocol => "Invalid command type ${type}")
     unless $self->can($method);
   return $self->barf(protocol => "Empty command args")
@@ -36,13 +36,13 @@ sub barf ($self, @barf) { $self->barfed(1)->emit(barf => @barf) }
 
 sub send ($self, @send) { $self->emit(send => @send) }
 
-sub _dispatch_call { shift->_request(@_) }
-sub _dispatch_cast { shift->_request(@_) }
-sub _dispatch_listen { shift->_request(@_) }
-sub _dispatch_trap { shift->_request(@_) }
+sub _receive_call { shift->_request(@_) }
+sub _receive_cast { shift->_request(@_) }
+sub _receive_listen { shift->_request(@_) }
+sub _receive_trap { shift->_request(@_) }
 
-sub _dispatch_unlisten { shift->_cancel(@_) }
-sub _dispatch_untrap { shift->_cancel(@_) }
+sub _receive_unlisten { shift->_cancel(@_) }
+sub _receive_untrap { shift->_cancel(@_) }
 
 sub _request_class ($self, $type) {
   my $class = "Hydling::ControlPort::${\ucfirst($type)}Request";
@@ -55,7 +55,7 @@ sub _request ($self, $type, $tag, $name, @args) {
   if (my $running = $self->running->{$tag}) {
     return $self->barf(protocol => "Duplicate use of tag $tag") if $tag;
     $running->awaitable->AWAIT_ON_READY(sub {
-      $self->dispatch($type, $tag, $name, @args);
+      $self->receive($type, $tag, $name, @args);
     });
     return;
   }
@@ -64,7 +64,7 @@ sub _request ($self, $type, $tag, $name, @args) {
     name => $name,
     args => \@args,
     session => $self,
-  )->dispatch;
+  )->receive;
   return;
 }
 

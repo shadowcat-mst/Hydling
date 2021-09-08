@@ -32,7 +32,7 @@ sub accept ($self, $loop, $stream, $id) {
           return $self->barf(protocol => "Couldn't decode message: $err");
         }
       };
-      $session->dispatch(@command);
+      $session->receive(@command);
       last if $self->barfed;
     }
     return

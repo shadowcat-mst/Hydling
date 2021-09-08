@@ -31,7 +31,7 @@ sub deregister ($self) {
   $self
 }
 
-sub dispatch ($self) {
+sub receive ($self) {
   my $handler = $self->session->handlers->lookup($self->type => $self->name);
   return $self->fail(undef) unless $handler;
   try {
