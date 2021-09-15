@@ -6,3 +6,4 @@ requires "Import::Into";
 requires "Safe::Isa";
 requires "Class::Method::Modifiers";
 requires "Role::Tiny";
+requires "JSONY";
