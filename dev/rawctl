@@ -1,0 +1,52 @@
+#!/usr/bin/env perl
+
+use Hydling::Base -strict;
+
+use Mojo::StupidRPC;
+use Mojo::JSON qw(encode_json);
+use JSONY;
+
+die "Missing ctl_path" unless my $ctl_path = shift @ARGV;
+
+my $invoke = sub ($client, @invoke) {
+  my $type = 'call';
+  state %special = map +($_ => 1), qw(call cast listen unlisten);
+  $type = shift @invoke if $special{$invoke[0]};
+  my $outgoing = $client->$type(@invoke);
+  foreach my $event (qw(done fail data notify)) {
+    $outgoing->on($event => sub ($, @payload) {
+      say encode_json([ $event => @payload ]);
+    });
+  }
+  $outgoing;
+};
+
+Mojo::StupidRPC->client_p({ path => $ctl_path })
+  ->then(sub ($client) {
+
+    if (@ARGV) {
+
+      my @call = map @$_, map JSONY->load($_), @ARGV;
+
+      $client->$invoke(@call)
+             ->tap(on => complete => sub { Mojo::IOLoop->stop });
+
+    } else {
+
+      my $stdin = Mojo::IOLoop::Stream->new(\*STDIN);
+      my $buf;
+      $stdin->on(read => sub ($, $read) {
+        $buf .= $read;
+        while ($buf =~ s/^(.*)\r?\n//ms) {
+          my $line = $1;
+          my @call = @{JSONY->load($line)};
+          $client->$invoke(@call);
+        }
+        return
+      });
+      $stdin->on(close => sub { Mojo::IOLoop->stop });
+      Mojo::IOLoop->stream($stdin);
+    }
+  });
+
+Mojo::IOLoop->start;

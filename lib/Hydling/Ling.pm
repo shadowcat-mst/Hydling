@@ -4,15 +4,14 @@ use Mojo::IRC;
 use Mojo::StupidRPC;
 use Hydling::Base;
 
-has 'control_port_config';
+with 'Hydling::HasControlPort';
 
 has 'irc';
 
-has control_port_handlers => sub ($self) {
+sub setup_handlers ($self, $h) {
   Scalar::Util::weaken($self);
-  my $h = Mojo::StupidRPC->handler_set;
   foreach my $name (qw(connect disconnect)) {
-    my $method = "${name}_p}";
+    my $method = "${name}_p";
     $h->call($name => sub ($r, @) {
       $self->irc
            ->$method
@@ -46,10 +45,11 @@ has control_port_handlers => sub ($self) {
     qw(connect_timeout local_address name nick pass real_host server)
   ) {
     $h->call($accessor => sub ($r, @value) {
-      $self->$accessor($value[0]) if @value;
-      $r->done($self->$accessor);
+      $self->irc->$accessor($value[0]) if @value;
+      $r->done($self->irc->$accessor);
     });
   }
+  $h->call(status => sub ($r) { $r->done($self->irc->status) });
   foreach my $thing (qw(status message)) {
     $h->listen(message => sub ($r) {
       Scalar::Util::weaken($r);
@@ -60,17 +60,12 @@ has control_port_handlers => sub ($self) {
       return;
     });
   }
-  return $h;
-};
+}
 
 sub on { shift->irc->on(@_) }
 sub unsubscribe { shift->irc->unsubscribe(@_) }
 
 sub start ($self) {
-  Mojo::StupidRPC->server(
-    $self->control_port_config,
-    $self->control_port_handlers,
-  );
   $self->irc(Mojo::IRC->new->nick('hydling'));
 }
 

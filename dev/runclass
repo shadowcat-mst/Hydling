@@ -1,0 +1,13 @@
+#!/usr/bin/env perl
+
+use Hydling::Base -strict;
+
+die "Missing class" unless my $class = shift @ARGV;
+
+die "Missing ctl_path" unless my $ctl_path = shift @ARGV;
+
+my $obj = _load_my($class)->new(ctl_path => $ctl_path);
+
+$obj->start;
+
+Mojo::IOLoop->start;
