@@ -28,12 +28,13 @@ Mojo::StupidRPC->client_p({ path => $ctl_path })
 
       my @call = map @$_, map JSONY->load($_), @ARGV;
 
-      $client->$invoke(@call)
-             ->tap(on => complete => sub { Mojo::IOLoop->stop });
+      my $req = $client->$invoke(@call);
+      $req->on(complete => sub { Mojo::IOLoop->stop })
+        unless $req->can('active');
 
     } else {
 
-      my $stdin = Mojo::IOLoop::Stream->new(\*STDIN);
+      my $stdin = Mojo::IOLoop::Stream->new(\*STDIN)->timeout(0);
       my $buf;
       $stdin->on(read => sub ($, $read) {
         $buf .= $read;
