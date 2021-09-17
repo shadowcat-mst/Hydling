@@ -17,7 +17,7 @@ sub setup_handlers ($self, $h) {
            ->$method
            ->then(
                sub { $r->done },
-               sub ($self, $err) { $r->fail($err) },
+               sub ($err) { $r->fail($err) },
              );
     });
   }
@@ -51,12 +51,12 @@ sub setup_handlers ($self, $h) {
   }
   $h->call(status => sub ($r) { $r->done($self->irc->status) });
   foreach my $thing (qw(status message)) {
-    $h->listen(message => sub ($r) {
+    $h->listen($thing => sub ($r) {
       Scalar::Util::weaken($r);
       my $name = $r->name;
       my $cb = $self->on($name => sub ($, @args) { $r->notify(@args) });
       $r->once(cancel => $self->curry::unsubscribe($name => $cb));
-      $r->done($thing eq 'status' ? $self->status : ());
+      $r->done($thing eq 'status' ? $self->irc->status : ());
       return;
     });
   }
